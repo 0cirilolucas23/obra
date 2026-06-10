@@ -65,11 +65,10 @@ export default function LandingPage() {
               <button
                 key={p.id}
                 onClick={() => handleProviderChange(p.id)}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border text-left transition-all duration-200 ${
-                  provider === p.id
+                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border text-left transition-all duration-200 ${provider === p.id
                     ? 'border-[#E83322] bg-[#E83322]/10'
                     : 'border-[#F0EDE6]/10 bg-[#1A0A0A] hover:border-[#F0EDE6]/20'
-                }`}
+                  }`}
               >
                 <span className={`text-sm font-medium ${provider === p.id ? 'text-[#F0EDE6]' : 'text-[#F0EDE6]/60'}`}>
                   {p.name}
@@ -119,11 +118,10 @@ export default function LandingPage() {
         <button
           onClick={handleStart}
           disabled={!apiKey.trim()}
-          className={`w-full py-3.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
-            apiKey.trim()
+          className={`w-full py-3.5 rounded-lg font-semibold text-sm transition-all duration-200 ${apiKey.trim()
               ? 'bg-[#E83322] text-white hover:bg-[#E83322]/85 active:scale-[0.98]'
               : 'bg-[#F0EDE6]/8 text-[#F0EDE6]/25 cursor-not-allowed'
-          }`}
+            }`}
         >
           Começar agora
         </button>
@@ -145,8 +143,13 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-
+        <div className="mt-12 flex items-center justify-center gap-2">
+        <p className="mt-1.5 text-xs text-[#F0EDE6]/20">
+          Em parceria com <a href="https://www.growfy.com.br/" target="_blank" rel="noopener noreferrer" className="text-[#E83322]/70 hover:text-[#E83322] transition-colors">Growfy</a>.
+        </p>
       </div>
-    </main>
+
+    </div>
+    </main >
   )
 }
