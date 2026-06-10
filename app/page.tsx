@@ -139,7 +139,7 @@ export default function LandingPage() {
               { letter: 'A', word: 'Arte' },
             ].map(({ letter, word }) => (
               <div key={letter} className="text-center">
-                <span className="block text-lg font-bold text-[#E83322]">{letter}</span>
+                <span className="block text-3xl font-bold text-[#E83322]">{letter}</span>
                 <span className="block text-xs text-[#F0EDE6]/30 mt-0.5">{word}</span>
               </div>
             ))}

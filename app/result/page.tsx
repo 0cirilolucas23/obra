@@ -1,38 +1,20 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import ResultBlock from '@/components/ResultBlock'
 import ColorSwatch from '@/components/ColorSwatch'
 import ThemeCard from '@/components/ThemeCard'
-import { generateObraResult } from '@/lib/ai'
 import type { ObraResult } from '@/lib/types'
-import { loadApiKey, loadAnswers, loadProvider, saveResult, loadResult, clearAll } from '@/store/answers'
-
-const LOADING_MESSAGES = [
-  'Mapeando seu arquétipo...',
-  'Definindo sua linha editorial...',
-  'Construindo sua paleta...',
-  'Organizando sua narrativa...',
-]
-
-function useRotatingMessage(messages: string[], interval = 2200) {
-  const [index, setIndex] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setIndex((i) => (i + 1) % messages.length), interval)
-    return () => clearInterval(id)
-  }, [messages, interval])
-  return messages[index]
-}
+import { loadResult, loadError, clearAll, clearError } from '@/store/answers'
 
 export default function ResultPage() {
   const router = useRouter()
   const [result, setResult] = useState<ObraResult | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
-  const [retryCount, setRetryCount] = useState(0)
-  const message = useRotatingMessage(LOADING_MESSAGES)
+  const [copied, setCopied] = useState(false)
+  const [bioCopied, setBioCopied] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -41,48 +23,36 @@ export default function ResultPage() {
   useEffect(() => {
     if (!mounted) return
 
-    const cached = loadResult()
-    if (cached) {
-      setResult(cached)
-      setLoading(false)
+    const cachedResult = loadResult()
+    const cachedError = loadError()
+
+    if (cachedResult) {
+      setResult(cachedResult)
       return
     }
 
-    const apiKey = loadApiKey()
-    const answers = loadAnswers()
-
-    if (!apiKey || !answers) {
-      router.replace('/')
+    if (cachedError) {
+      setError(cachedError)
       return
     }
 
-    setLoading(true)
-    setError(null)
+    router.replace('/')
+  }, [mounted, router])
 
-    const provider = loadProvider()
-    generateObraResult(provider, apiKey, answers)
-      .then((res) => {
-        saveResult(res)
-        setResult(res)
-        setLoading(false)
-      })
-      .catch((err: Error) => {
-        const msg = err.message ?? ''
-        if (msg.includes('429')) {
-          setError('Quota da API excedida. Aguarde 1 minuto e tente novamente — ou ative o faturamento em aistudio.google.com.')
-        } else if (msg.includes('403') || msg.includes('API key')) {
-          setError('API key inválida ou sem permissão. Gere uma nova em aistudio.google.com/app/apikey.')
-        } else {
-          setError(msg || 'Erro ao gerar resultado. Tente novamente.')
-        }
-        setLoading(false)
-      })
-  }, [mounted, router, retryCount])
+  function handleCopyBio() {
+    if (!result) return
+    navigator.clipboard.writeText(result.arquetipo.frase_bio).then(() => {
+      setBioCopied(true)
+      setTimeout(() => setBioCopied(false), 2000)
+    }).catch(() => {})
+  }
 
   function handleCopyAll() {
     if (!result) return
-    const md = buildMarkdown(result)
-    navigator.clipboard.writeText(md).catch(() => {})
+    navigator.clipboard.writeText(buildMarkdown(result)).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {})
   }
 
   function handleDownloadPDF() {
@@ -94,22 +64,12 @@ export default function ResultPage() {
     router.push('/')
   }
 
-  if (!mounted) return null
-
-  if (loading) {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center px-6">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="relative w-12 h-12">
-            <div className="absolute inset-0 rounded-full border-2 border-[#E83322]/20" />
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#E83322] animate-spin" />
-          </div>
-          <p className="text-sm text-[#F0EDE6]/50 transition-all duration-500">{message}</p>
-          <span className="text-xs text-[#E83322] font-bold tracking-widest uppercase">OBRA</span>
-        </div>
-      </main>
-    )
+  function handleRetry() {
+    clearError()
+    router.push('/processing')
   }
+
+  if (!mounted) return null
 
   if (error) {
     return (
@@ -118,7 +78,7 @@ export default function ResultPage() {
           <p className="text-[#E83322] font-semibold mb-2">Algo deu errado</p>
           <p className="text-sm text-[#F0EDE6]/50 mb-6">{error}</p>
           <button
-            onClick={() => setRetryCount((c) => c + 1)}
+            onClick={handleRetry}
             className="px-6 py-3 bg-[#E83322] text-white rounded-lg text-sm font-semibold hover:bg-[#E83322]/80 transition-colors mr-3"
           >
             Tentar novamente
@@ -139,6 +99,7 @@ export default function ResultPage() {
   return (
     <main className="min-h-screen px-4 py-12 print:py-6">
       <div className="w-full max-w-2xl mx-auto">
+
         {/* Header */}
         <div className="mb-10 print:mb-6">
           <span className="text-xs font-bold text-[#E83322] tracking-[0.3em] uppercase">OBRA</span>
@@ -155,8 +116,18 @@ export default function ResultPage() {
               {result.arquetipo.descricao}
             </p>
             <div className="bg-[#0A0A09] border border-[#E83322]/20 rounded-lg px-4 py-3">
-              <p className="text-xs text-[#E83322] uppercase tracking-widest mb-1">Frase para bio</p>
-              <p className="text-sm text-[#F0EDE6] font-medium">{result.arquetipo.frase_bio}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-[#E83322] uppercase tracking-widest mb-1">Frase para bio</p>
+                  <p className="text-sm text-[#F0EDE6] font-medium">{result.arquetipo.frase_bio}</p>
+                </div>
+                <button
+                  onClick={handleCopyBio}
+                  className="flex-shrink-0 text-xs text-[#F0EDE6]/30 hover:text-[#E83322] transition-colors mt-0.5"
+                >
+                  {bioCopied ? 'copiado!' : 'copiar'}
+                </button>
+              </div>
             </div>
           </ResultBlock>
 
@@ -228,9 +199,13 @@ export default function ResultPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 bg-[#0A0A09] border border-[#F0EDE6]/8 rounded-lg px-4 py-3">
-              <span className="text-xs text-[#F0EDE6]/30 uppercase tracking-widest">Frequência</span>
-              <span className="text-xs text-[#F0EDE6]/60">{result.linha_editorial.frequencia}</span>
+            <div className="bg-[#0A0A09] border border-[#F0EDE6]/8 rounded-lg px-4 py-3">
+              <p className="text-xs text-[#F0EDE6]/50 font-medium">{result.linha_editorial.frequencia}</p>
+              {result.linha_editorial.justificativa_frequencia && (
+                <p className="text-xs text-[#F0EDE6]/35 mt-2 leading-relaxed">
+                  {result.linha_editorial.justificativa_frequencia}
+                </p>
+              )}
             </div>
           </ResultBlock>
 
@@ -247,10 +222,16 @@ export default function ResultPage() {
         {/* Action buttons */}
         <div className="mt-8 flex flex-wrap gap-3 print:hidden">
           <button
+            onClick={() => router.push('/studio')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#E83322] text-white rounded-lg text-sm font-semibold hover:bg-[#E83322]/85 active:scale-[0.98] transition-all duration-200"
+          >
+            Abrir Estúdio OBRA →
+          </button>
+          <button
             onClick={handleCopyAll}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#1A0A0A] border border-[#F0EDE6]/10 text-[#F0EDE6]/70 rounded-lg text-sm hover:border-[#F0EDE6]/25 hover:text-[#F0EDE6] transition-all duration-200"
           >
-            Copiar tudo
+            {copied ? 'Copiado!' : 'Copiar tudo'}
           </button>
           <button
             onClick={handleDownloadPDF}
@@ -265,6 +246,7 @@ export default function ResultPage() {
             Recomeçar
           </button>
         </div>
+
       </div>
     </main>
   )
@@ -308,11 +290,12 @@ ${paleta.map((c) => `- **${c.nome}** (${c.hex}) — ${c.uso}. ${c.justificativa}
 ${linha_editorial.pilares.map((p) => `- **${p.nome}** (${p.proporcao}): ${p.descricao}`).join('\n')}
 
 **Frequência:** ${linha_editorial.frequencia}
+${linha_editorial.justificativa_frequencia ? `\n${linha_editorial.justificativa_frequencia}` : ''}
 
 ---
 
 ## Primeiros 8 Temas
 
-${temas.slice(0, 8).map((t, i) => `${i + 1}. **${t.titulo}** — ${t.formato} — Etapa ${t.etapa_obra}`).join('\n')}
+${temas.slice(0, 8).map((t, i) => `${i + 1}. **${t.titulo}** — ${t.formato} — Etapa ${t.etapa_obra}${t.estrutura ? `\n   ${t.estrutura}` : ''}`).join('\n')}
 `
 }

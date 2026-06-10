@@ -1,4 +1,4 @@
-import type { Answers, ObraResult } from '@/lib/types'
+import type { Answers, ObraResult, Message, AgentId } from '@/lib/types'
 import type { Provider } from '@/lib/ai'
 
 const KEYS = {
@@ -6,6 +6,10 @@ const KEYS = {
   apiKey: 'obra_api_key',
   answers: 'obra_answers',
   result: 'obra_result',
+  error: 'obra_error',
+  chatRadar: 'obra_chat_radar',
+  chatVoz: 'obra_chat_voz',
+  chatBriefing: 'obra_chat_briefing',
 } as const
 
 export function saveProvider(provider: Provider): void {
@@ -50,6 +54,42 @@ export function loadResult(): ObraResult | null {
   } catch {
     return null
   }
+}
+
+export function saveError(message: string): void {
+  localStorage.setItem(KEYS.error, message)
+}
+
+export function loadError(): string | null {
+  return localStorage.getItem(KEYS.error)
+}
+
+export function clearError(): void {
+  localStorage.removeItem(KEYS.error)
+}
+
+function chatKey(agentId: AgentId): string {
+  if (agentId === 'radar') return KEYS.chatRadar
+  if (agentId === 'voz') return KEYS.chatVoz
+  return KEYS.chatBriefing
+}
+
+export function loadChatHistory(agentId: AgentId): Message[] {
+  const raw = localStorage.getItem(chatKey(agentId))
+  if (!raw) return []
+  try {
+    return JSON.parse(raw) as Message[]
+  } catch {
+    return []
+  }
+}
+
+export function saveChatHistory(agentId: AgentId, messages: Message[]): void {
+  localStorage.setItem(chatKey(agentId), JSON.stringify(messages))
+}
+
+export function clearChatHistory(agentId: AgentId): void {
+  localStorage.removeItem(chatKey(agentId))
 }
 
 export function clearAll(): void {

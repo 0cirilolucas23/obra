@@ -54,12 +54,14 @@ export interface PilarEditorial {
 export interface LinhaEditorial {
   pilares: PilarEditorial[]
   frequencia: string
+  justificativa_frequencia?: string
 }
 
 export interface Tema {
   titulo: string
   formato: string
   etapa_obra: string
+  estrutura?: string
 }
 
 export interface ObraResult {
@@ -69,3 +71,10 @@ export interface ObraResult {
   linha_editorial: LinhaEditorial
   temas: Tema[]
 }
+
+export interface Message {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export type AgentId = 'radar' | 'voz' | 'briefing'

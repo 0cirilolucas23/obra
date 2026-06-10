@@ -49,7 +49,7 @@ export default function QuestionnairePage() {
 
     if (current === QUESTIONS.length - 1) {
       saveAnswers(answers)
-      router.push('/result')
+      router.push('/processing')
       return
     }
 

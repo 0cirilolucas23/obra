@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { Answers, ObraResult } from './types'
+import type { Answers, ObraResult, Message } from './types'
 import { buildPrompt } from './prompts'
 
 export type Provider = 'groq' | 'gemini' | 'openai' | 'anthropic'
@@ -52,6 +52,8 @@ export const PROVIDERS: ProviderInfo[] = [
     keyUrl: 'https://console.anthropic.com/settings/keys',
   },
 ]
+
+// ── One-shot (STEP 4 result generation) ──────────────────────────────────────
 
 async function callOpenAICompatible(
   baseUrl: string,
@@ -162,6 +164,122 @@ export async function generateObraResult(
         break
     }
     return parseResult(text)
+  } catch (err) {
+    throw friendlyError(err as Error)
+  }
+}
+
+// ── Chat with history (STEP 5 agents) ────────────────────────────────────────
+
+async function callAgentOpenAICompatible(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: Message[],
+  userMessage: string
+): Promise<string> {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: userMessage },
+  ]
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages, max_tokens: 2048 }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const msg = (err as { error?: { message?: string } }).error?.message ?? res.statusText
+    throw new Error(`[${res.status}] ${msg}`)
+  }
+
+  const data = await res.json() as { choices: { message: { content: string } }[] }
+  return data.choices[0].message.content
+}
+
+async function callAgentAnthropic(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: Message[],
+  userMessage: string
+): Promise<string> {
+  const messages = [
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: userMessage },
+  ]
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model, max_tokens: 2048, system: systemPrompt, messages }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const msg = (err as { error?: { message?: string } }).error?.message ?? res.statusText
+    throw new Error(`[${res.status}] ${msg}`)
+  }
+
+  const data = await res.json() as { content: { type: string; text: string }[] }
+  return data.content[0].text
+}
+
+async function callAgentGemini(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: Message[],
+  userMessage: string
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const geminiModel = genAI.getGenerativeModel({
+    model,
+    systemInstruction: systemPrompt,
+  })
+
+  const chat = geminiModel.startChat({
+    history: history.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    })),
+  })
+
+  const result = await chat.sendMessage(userMessage)
+  return result.response.text()
+}
+
+export async function callAgentAI(
+  provider: Provider,
+  apiKey: string,
+  systemPrompt: string,
+  history: Message[],
+  userMessage: string
+): Promise<string> {
+  const info = PROVIDERS.find((p) => p.id === provider)!
+
+  try {
+    switch (provider) {
+      case 'groq':
+        return await callAgentOpenAICompatible('https://api.groq.com/openai/v1', apiKey, info.model, systemPrompt, history, userMessage)
+      case 'openai':
+        return await callAgentOpenAICompatible('https://api.openai.com/v1', apiKey, info.model, systemPrompt, history, userMessage)
+      case 'anthropic':
+        return await callAgentAnthropic(apiKey, info.model, systemPrompt, history, userMessage)
+      case 'gemini':
+        return await callAgentGemini(apiKey, info.model, systemPrompt, history, userMessage)
+    }
   } catch (err) {
     throw friendlyError(err as Error)
   }
