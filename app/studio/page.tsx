@@ -56,6 +56,7 @@ export default function StudioPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ObraResult | null>(null)
   const [answers, setAnswers] = useState<Answers | null>(null)
+  const [provider, setProviderState] = useState<string>('gemini')
 
   useEffect(() => {
     setMounted(true)
@@ -75,6 +76,7 @@ export default function StudioPage() {
 
     setResult(res)
     setAnswers(ans)
+    setProviderState(loadProvider())
     setHistories({
       radar: loadChatHistory('radar'),
       voz: loadChatHistory('voz'),
@@ -96,8 +98,10 @@ export default function StudioPage() {
     setHistories((h) => ({ ...h, [activeAgent]: newHistory }))
     setLoading(true)
 
+    const useSearch = activeAgent === 'radar' && provider === 'gemini'
+
     try {
-      const reply = await callAgentAI(provider, apiKey, systemPrompt, currentHistory, text)
+      const reply = await callAgentAI(provider, apiKey, systemPrompt, currentHistory, text, useSearch)
       const updated: Message[] = [...newHistory, { role: 'assistant', content: reply }]
       setHistories((h) => ({ ...h, [activeAgent]: updated }))
       saveChatHistory(activeAgent, updated)
@@ -184,6 +188,15 @@ export default function StudioPage() {
           <h2 className="text-sm font-semibold text-[#F0EDE6]">{activeInfo.name}</h2>
           <p className="text-xs text-[#F0EDE6]/40 mt-0.5">{activeInfo.description}</p>
         </div>
+
+        {/* RADAR warning */}
+        {activeAgent === 'radar' && provider !== 'gemini' && (
+          <div className="px-6 py-2.5 bg-[#E83322]/8 border-b border-[#E83322]/15 flex-shrink-0">
+            <p className="text-xs text-[#E83322]/80">
+              Pesquisa real requer Gemini Flash. Resultados podem ser genéricos.
+            </p>
+          </div>
+        )}
 
         {/* Chat window */}
         <div className="flex-1 min-h-0">

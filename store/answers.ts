@@ -17,7 +17,9 @@ export function saveProvider(provider: Provider): void {
 }
 
 export function loadProvider(): Provider {
-  return (localStorage.getItem(KEYS.provider) as Provider) ?? 'groq'
+  const stored = localStorage.getItem(KEYS.provider) as Provider | null
+  if (!stored || stored === ('groq' as string)) return 'gemini'
+  return stored
 }
 
 export function saveApiKey(key: string): void {

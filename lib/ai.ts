@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Answers, ObraResult, Message } from './types'
 import { buildPrompt } from './prompts'
 
-export type Provider = 'groq' | 'gemini' | 'openai' | 'anthropic'
+export type Provider = 'gemini' | 'openai' | 'anthropic'
 
 export interface ProviderInfo {
   id: Provider
@@ -16,40 +16,31 @@ export interface ProviderInfo {
 
 export const PROVIDERS: ProviderInfo[] = [
   {
-    id: 'groq',
-    name: 'Groq',
-    model: 'llama-3.3-70b-versatile',
-    free: true,
-    placeholder: 'gsk_...',
-    hint: 'Gratuito — gere sua key em console.groq.com',
-    keyUrl: 'https://console.groq.com/keys',
-  },
-  {
     id: 'gemini',
-    name: 'Google Gemini',
-    model: 'gemini-2.0-flash-lite',
-    free: false,
+    name: 'Gemini Flash',
+    model: 'gemini-2.0-flash',
+    free: true,
     placeholder: 'AIza...',
-    hint: 'Requer faturamento — aistudio.google.com/app/apikey',
+    hint: 'Gratuito — aistudio.google.com/app/apikey',
     keyUrl: 'https://aistudio.google.com/app/apikey',
   },
   {
-    id: 'openai',
-    name: 'OpenAI',
-    model: 'gpt-4o-mini',
-    free: false,
-    placeholder: 'sk-...',
-    hint: 'platform.openai.com/api-keys',
-    keyUrl: 'https://platform.openai.com/api-keys',
-  },
-  {
     id: 'anthropic',
-    name: 'Anthropic',
-    model: 'claude-haiku-4-5-20251001',
+    name: 'Claude Sonnet',
+    model: 'claude-sonnet-4-6',
     free: false,
     placeholder: 'sk-ant-...',
     hint: 'console.anthropic.com/settings/keys',
     keyUrl: 'https://console.anthropic.com/settings/keys',
+  },
+  {
+    id: 'openai',
+    name: 'GPT-4o',
+    model: 'gpt-4o',
+    free: false,
+    placeholder: 'sk-...',
+    hint: 'platform.openai.com/api-keys',
+    keyUrl: 'https://platform.openai.com/api-keys',
   },
 ]
 
@@ -113,8 +104,8 @@ async function callAnthropic(apiKey: string, model: string, prompt: string): Pro
 async function callGemini(apiKey: string, model: string, prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey)
   const geminiModel = genAI.getGenerativeModel({ model })
-  const result = await geminiModel.generateContent(prompt)
-  return result.response.text()
+  const res = await geminiModel.generateContent(prompt)
+  return res.response.text()
 }
 
 function parseResult(text: string): ObraResult {
@@ -150,9 +141,6 @@ export async function generateObraResult(
   try {
     let text: string
     switch (provider) {
-      case 'groq':
-        text = await callOpenAICompatible('https://api.groq.com/openai/v1', apiKey, info.model, prompt)
-        break
       case 'openai':
         text = await callOpenAICompatible('https://api.openai.com/v1', apiKey, info.model, prompt)
         break
@@ -241,12 +229,14 @@ async function callAgentGemini(
   model: string,
   systemPrompt: string,
   history: Message[],
-  userMessage: string
+  userMessage: string,
+  useSearch?: boolean
 ): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey)
   const geminiModel = genAI.getGenerativeModel({
     model,
     systemInstruction: systemPrompt,
+    ...(useSearch ? { tools: [{ googleSearchRetrieval: {} }] } : {}),
   })
 
   const chat = geminiModel.startChat({
@@ -256,8 +246,8 @@ async function callAgentGemini(
     })),
   })
 
-  const result = await chat.sendMessage(userMessage)
-  return result.response.text()
+  const res = await chat.sendMessage(userMessage)
+  return res.response.text()
 }
 
 export async function callAgentAI(
@@ -265,20 +255,19 @@ export async function callAgentAI(
   apiKey: string,
   systemPrompt: string,
   history: Message[],
-  userMessage: string
+  userMessage: string,
+  useSearch?: boolean
 ): Promise<string> {
   const info = PROVIDERS.find((p) => p.id === provider)!
 
   try {
     switch (provider) {
-      case 'groq':
-        return await callAgentOpenAICompatible('https://api.groq.com/openai/v1', apiKey, info.model, systemPrompt, history, userMessage)
       case 'openai':
         return await callAgentOpenAICompatible('https://api.openai.com/v1', apiKey, info.model, systemPrompt, history, userMessage)
       case 'anthropic':
         return await callAgentAnthropic(apiKey, info.model, systemPrompt, history, userMessage)
       case 'gemini':
-        return await callAgentGemini(apiKey, info.model, systemPrompt, history, userMessage)
+        return await callAgentGemini(apiKey, info.model, systemPrompt, history, userMessage, useSearch)
     }
   } catch (err) {
     throw friendlyError(err as Error)
